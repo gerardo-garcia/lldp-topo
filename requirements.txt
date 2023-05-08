@@ -1,0 +1,20 @@
+bcrypt==4.0.1
+    # via paramiko
+cffi==1.15.1
+    # via
+    #   cryptography
+    #   pynacl
+cryptography==40.0.2
+    # via paramiko
+paramiko==3.1.0
+    # via -r requirements.in
+prettytable==3.7.0
+    # via -r requirements.in
+pycparser==2.21
+    # via cffi
+pynacl==1.5.0
+    # via paramiko
+pyyaml==6.0
+    # via -r requirements.in
+wcwidth==0.2.6
+    # via prettytable
