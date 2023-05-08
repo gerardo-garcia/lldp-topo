@@ -7,6 +7,7 @@ from prettytable import PrettyTable
 import logging
 import paramiko
 import subprocess
+from traceback import format_exc as traceback_format_exc
 
 
 ####################################
@@ -70,28 +71,9 @@ def set_logger(verbose):
         logger.setLevel(level=logging.DEBUG)
 
 
-def get_replicas(manifest, kind):
-    # Get replicas, replicas_str
-    if kind in {"DaemonSet"}:
-        replicas = 1
-        replicas_str = "N/A (auto)"
-    elif kind in {"Pod"}:
-        replicas = 1
-        replicas_str = "1 (auto)"
-    elif kind in {"Deployment", "StatefulSet", "ReplicaSet"}:
-        replicas = manifest.get("spec", {}).get("replicas")
-        if not replicas:
-            replicas = 1
-            replicas_str = "1 (auto)"
-        else:
-            replicas_str = str(replicas)
-        logger.info(f"Replicas: {replicas}")
-    return replicas, replicas_str
-
-
 def run_command(server, command, ssh_command=None):
+    logger.info(f"Server: {server}")
     if not ssh_command:
-        logger.info(f"Server: {server}")
         server_fields = server.split("@")
         username = server_fields[0]
         host = server_fields[1]
@@ -102,15 +84,23 @@ def run_command(server, command, ssh_command=None):
         _stdin, _stdout, _stderr = client.exec_command(command)
         logger.debug(f"Command: {command} completed")
         # print(_stdout.read().decode())
+        return _stdout.read().decode()
     else:
+        subprocess_cmd = f"{ssh_command} {server} {command}"
+        logger.info(f"Command: {subprocess_cmd}")
         result = subprocess.run(
-            ["/bin/sh", "-c", f"{ssh_command}", f"{server}", f"{command}"],
-            capture_output=True,
-            text=True,
+            subprocess_cmd,
+            shell=True,
+            check=True,
+            # Required for python<3.7
+            stdout=subprocess.PIPE,
+            # These 2 lines can be uncommented for python>=3.7
+            # capture_output=True,
+            # text=True,
         )
         _stdout = result.stdout
         # _stderr = result.stderr
-    return _stdout.read().decode()
+        return _stdout.decode()
 
 
 def test_ssh_lldpcli(servers_list, ssh_command=None):
@@ -149,6 +139,13 @@ def get_lldp_info(server, ssh_command=None):
         logger.debug(f"Server {server}. Neighbors: {neighbors}")
     except Exception:
         logger.info(print(f"Server {server}: {command} DID NOT WORK"))
+        e = traceback_format_exc()
+        logger.critical(
+            f"Server {server}: {command} DID NOT WORK. Exit Exception: {e}",
+            exc_info=True,
+        )
+        exit(1)
+
     return chassis, interfaces, neighbors
 
 
@@ -218,13 +215,21 @@ if __name__ == "__main__":
         default="table",
         help="output format",
     )
+    parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
     parser.add_argument(
         "--test",
         default=False,
         action="store_true",
         help="only test ssh connectivity and lldpcli",
     )
-    parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
+    parser.add_argument(
+        "-c",
+        "--command",
+        type=str,
+        action="store",
+        default=None,
+        help="alternative command to connect to servers via ssh, e.g. `juju ssh`",
+    )
     parser.add_argument(
         "servers_list",
         metavar="SERVER",
@@ -251,12 +256,12 @@ if __name__ == "__main__":
 
     if args.test:
         # Test SSH and LLDPCLI and exits
-        test_output = test_ssh_lldpcli(args.servers_list)
+        test_output = test_ssh_lldpcli(args.servers_list, ssh_command=args.command)
         exit(test_output)
     for server in args.servers_list:
         # Get LLDP info and append it to rows
         logger.info(f"Server: {server}")
-        chassis, interfaces, neighbors = get_lldp_info(server)
+        chassis, interfaces, neighbors = get_lldp_info(server, ssh_command=args.command)
         logger.debug(f"Chassis: {yaml.safe_dump(chassis, indent=4, default_flow_style=False, sort_keys=False)}")
 
         # Get relevant fields from chassis
