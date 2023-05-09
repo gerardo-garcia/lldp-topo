@@ -186,10 +186,12 @@ def get_neighbors(neighbors):
                 logger.error(f"Expected a single chassis in iface info. There are {len(chassis_keys)} keys: {chassis_keys}")
                 exit(1)
             chassis_name = chassis_keys[0]
+            chassis_id = chassis[chassis_name].get("id", {}).get("value", "UNKNOWN")
             brws = get_brws_capabilities(chassis[chassis_name])
             port = iface_info.get("port", {}).get("id", {}).get("value", "")
             neighbor_dict[iface_name] = {
                 "chassis": chassis_name,
+                "chassis_id": chassis_id,
                 "brws": brws,
                 "port": port,
             }
@@ -245,10 +247,12 @@ if __name__ == "__main__":
     # Initialize variables
     headers = [
         "Edge 1",
+        "ChassisID 1",
         "BRWS 1",
         "Iface 1",
         "MAC 1",
         "Edge 2",
+        "ChassisID 2",
         "BRWS 2",
         "Iface 2",
     ]
@@ -270,6 +274,7 @@ if __name__ == "__main__":
             logger.error(f"More than 1 chassis found in server {server}")
             exit(1)
         edge1 = chassis_keys[0]
+        chassis_id1 = chassis["local-chassis"]["chassis"][edge1].get("id", {}).get("value", "UNKNOWN")
         brws1 = get_brws_capabilities(chassis["local-chassis"]["chassis"][edge1])
 
         # Get relevant fields from neighbors and store them in neighbors_dict[iface]
@@ -290,16 +295,19 @@ if __name__ == "__main__":
             # Get relevant fields from neighbors in interface iface1
             neighbor_info = neighbors_dict.get(iface1, {})
             edge2 = neighbor_info.get("chassis")
+            chassis_id2 = neighbor_info.get("chassis_id")
             brws2 = neighbor_info.get("brws")
             iface2 = neighbor_info.get("port")
 
             rows.append(
                 [
                     edge1,
+                    chassis_id1,
                     brws1,
                     iface1,
                     mac1,
                     edge2,
+                    chassis_id2,
                     brws2,
                     iface2,
                 ]
