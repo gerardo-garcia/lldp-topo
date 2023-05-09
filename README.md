@@ -4,21 +4,35 @@ This program takes as input a list of nodes to be connected via ssh (pubkey has 
 
 The program assumes that you can access via ssh to the list of nodes/servers and they have lldpd running (the command lldpcli must be available).
 
+The output is a list of links (two edges) with the following fields:
+
+- Edge 1: name of the input node
+- BRWS 1: capabilities of the input node (0/1/X bits corresponding to Bridge, Router, Wlan and Station)
+- Iface 1: name of the interface in the input node
+- MAC 1: MAC of the interface in the input node
+- Edge 2: name of the neighbor node
+- BRWS 2: capabilities of the neighbor node (0/1/X bits corresponding to Bridge, Router, Wlan and Station)
+- Iface 2: name of the interface in the neighbor node
+
 ## Getting started
 
 ```bash
 $ ./lldp_topo.py -h
-usage: lldp_topo.py [-h] [-o {table,csv,yaml,json}] [--test] [-v] SERVER [SERVER ...]
+usage: lldp_topo.py [-h] [-o {table,csv,yaml,json}] [-v] [--test] [-c COMMAND]
+                    SERVER [SERVER ...]
 
 positional arguments:
   SERVER                server to be connected in format `user@server`
 
-options:
+optional arguments:
   -h, --help            show this help message and exit
   -o {table,csv,yaml,json}, --output {table,csv,yaml,json}
                         output format
-  --test                only test ssh connectivity and lldpcli
   -v, --verbose         increase output verbosity
+  --test                only test ssh connectivity and lldpcli
+  -c COMMAND, --command COMMAND
+                        alternative command to connect to servers via ssh,
+                        e.g. `juju ssh`
 ```
 
 To get LLDP topology from a list of servers:
@@ -45,7 +59,11 @@ $ ./lldp_topo.py user1@server1 user2@server2
 | server2    | 0001   | ens3f3     | 3c:fd:fe:9d:40:eb | None           | None   | None                      |
 | server2    | 0001   | eno4       | d0:67:26:cc:f5:97 | switch1        | 11XX   | Ten-GigabitEthernet2/0/8  |
 +------------+--------+------------+-------------------+----------------+--------+---------------------------+
+```
 
+The same in CSV format:
+
+```bash
 $ ./lldp_topo.py -o csv user1@server1 user2@server2
 Edge 1;BRWS 1;Iface 1;MAC 1;Edge 2;BRWS 2;Iface 2
 server1;1100;ens3f0;68:05:ca:38:6c:50;None;None;None
