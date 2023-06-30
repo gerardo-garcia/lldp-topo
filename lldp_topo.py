@@ -296,7 +296,7 @@ if __name__ == "__main__":
                 exit(1)
             # Get relevant fields from interface
             iface1 = iface_keys[0]
-            if re.match("enp.*s.*f.*", iface1):
+            if re.match("enp.*s.*f.*", iface1) or re.match("ens.*f.*", iface1):
                 logger.info(f"Skipping interface {iface1} since it is an SR-IOV interface")
                 continue
             mac1 = iface[iface1].get("port", {}).get("id", {}).get("value", "")
