@@ -1,4 +1,4 @@
-coverage==7.2.5
+coverage==7.2.7
     # via -r requirements-test.in
 mock==5.0.2
     # via -r requirements-test.in

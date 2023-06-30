@@ -2,7 +2,7 @@ setuptools-version-command==99.9
     # via -r requirements-dist.in
 
 # The following packages are considered to be unsafe in a requirements file:
-setuptools==67.7.2
+setuptools==68.0.0
     # via
     #   -r requirements-dist.in
     #   setuptools-version-command

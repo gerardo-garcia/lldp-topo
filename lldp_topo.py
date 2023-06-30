@@ -1,13 +1,14 @@
 #!/usr/bin/python3
 
-import json
-import yaml
 import argparse
 from prettytable import PrettyTable
+import json
 import logging
 import paramiko
+import re
 import subprocess
 from traceback import format_exc as traceback_format_exc
+import yaml
 
 
 ####################################
@@ -112,6 +113,7 @@ def test_ssh_lldpcli(servers_list, ssh_command=None):
             print(f"Server {server}: SSH working")
             command = "lldpcli show chassis"
             try:
+                logger.info(f"LLDP command: {command}")
                 run_command(server, command, ssh_command)
                 print(f"Server {server}: LLDPCLI working")
             except Exception:
@@ -126,13 +128,16 @@ def test_ssh_lldpcli(servers_list, ssh_command=None):
 def get_lldp_info(server, ssh_command=None):
     try:
         command = "lldpcli -f json show chassis details"
+        logger.info(f"LLDP command: {command}")
         output = run_command(server, command, ssh_command)
         chassis = yaml.safe_load(output)
         logger.debug(f"Server {server}. Chassis: {chassis}")
+        logger.info(f"LLDP command: {command}")
         command = "lldpcli -f json show interfaces details"
         output = run_command(server, command, ssh_command)
         interfaces = yaml.safe_load(output)
         logger.debug(f"Server {server}. Interfaces: {interfaces}")
+        logger.info(f"LLDP command: {command}")
         command = "lldpcli -f json show neighbors details"
         output = run_command(server, command, ssh_command)
         neighbors = yaml.safe_load(output)
@@ -291,6 +296,9 @@ if __name__ == "__main__":
                 exit(1)
             # Get relevant fields from interface
             iface1 = iface_keys[0]
+            if re.match("enp.*s.*f.*", iface1):
+                logger.info(f"Skipping interface {iface1} since it is an SR-IOV interface")
+                continue
             mac1 = iface[iface1].get("port", {}).get("id", {}).get("value", "")
             # Get relevant fields from neighbors in interface iface1
             neighbor_info = neighbors_dict.get(iface1, {})
