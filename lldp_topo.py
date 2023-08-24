@@ -191,12 +191,12 @@ def get_iface_info(server, interface, extra_pf_info=False, ssh_command=None):
             output = run_command(server, command, ssh_command)
             numa_id = output.strip()
 
-            command = f"cat /sys/class/net/{interface}/speed"
+            command = f"cat /sys/class/net/{interface}/speed || echo UNKNOWN"
             logger.debug(f"Command before SSH: {command}")
             output = run_command(server, command, ssh_command)
             speed = output.strip()
 
-            command = f"cat /sys/class/net/{interface}/operstate"
+            command = f"cat /sys/class/net/{interface}/operstate || echo UNKNOWN"
             logger.debug(f"Command before SSH: {command}")
             output = run_command(server, command, ssh_command)
             operstate = output.strip()
