@@ -8,6 +8,7 @@ import paramiko
 import re
 import subprocess
 from traceback import format_exc as traceback_format_exc
+from typing import Dict
 import yaml
 
 
@@ -278,7 +279,10 @@ def get_brws_capabilities(chassis):
 
 def get_neighbors(neighbors):
     neighbor_dict = {}
-    for neigh in neighbors.get("lldp", {}).get("interface", []):
+    neighbor_list = neighbors.get("lldp", {}).get("interface", [])
+    if isinstance(neighbor_list, Dict):
+        neighbor_list = [neighbor_list]
+    for neigh in neighbor_list:
         for iface_name, iface_info in neigh.items():
             chassis = iface_info.get("chassis", {})
             chassis_keys = list(chassis.keys())
