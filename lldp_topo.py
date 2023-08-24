@@ -143,6 +143,7 @@ def get_iface_info(server, interface, extra_pf_info=False, ssh_command=None):
                 "0x1583": "Fortville XL710 QSFP_A",
                 "0x1584": "Fortville XL710 QSFP_B",
                 "0x1585": "Fortville XL710 QSFP_C",
+                "0x37d2": "Ethernet Connection X722 for 10GBASE-T",
             }
         },
         "0x15b3": {
@@ -431,20 +432,20 @@ if __name__ == "__main__":
             iface1_extra = "N/A"
             if args.extra:
                 iface1_extra = iface1_info["extra"]
-            rows.append(
-                [
-                    edge1,
-                    chassis_id1,
-                    brws1,
-                    iface1,
-                    iface1_type,
-                    iface1_extra,
-                    mac1,
-                    edge2,
-                    chassis_id2,
-                    brws2,
-                    iface2,
-                ]
-            )
+            new_row = [
+                edge1,
+                chassis_id1,
+                brws1,
+                iface1,
+                iface1_type,
+                iface1_extra,
+                mac1,
+                edge2,
+                chassis_id2,
+                brws2,
+                iface2,
+            ]
+            logger.info(f"New row: {new_row}")
+            rows.append(new_row)
 
     print_table(headers, rows, args.output)
