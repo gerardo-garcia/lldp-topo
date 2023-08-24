@@ -9,10 +9,14 @@ The output is a list of links (two edges) with the following fields:
 - Edge 1: name of the input node
 - BRWS 1: capabilities of the input node (0/1/X bits corresponding to Bridge, Router, Wlan and Station)
 - Iface 1: name of the interface in the input node
+- Iface 1 Type: whether the interfaces in the server are `pf`, `vf`, `vlan`
+- Iface 1 Extra: extra information for PF interfaces (`vendor_name,vendor_id,device_name,device_id,speed,operstate`)
 - MAC 1: MAC of the interface in the input node
 - Edge 2: name of the neighbor node
 - BRWS 2: capabilities of the neighbor node (0/1/X bits corresponding to Bridge, Router, Wlan and Station)
 - Iface 2: name of the interface in the neighbor node
+
+The information about iface type and iface extra is obtained from the server, running some commands.
 
 ## Getting started
 
@@ -33,6 +37,8 @@ optional arguments:
   -c COMMAND, --command COMMAND
                         alternative command to connect to servers via ssh,
                         e.g. `juju ssh`
+  -q, --quick           print only LLDP neighbors, not all LLDP interfaces
+  -e, --extra           no extra info about server interfaces
 ```
 
 To get LLDP topology from a list of servers:
@@ -94,6 +100,13 @@ Server user2@server2: SSH working
 Server user2@server2: LLDPCLI working
 ```
 
+The recommended procedure to troubleshoot any problem is to use option `-v`, which logs commands used to get LLDP information, and the option `-e` which gives us extra information about the interface.
+
+```bash
+$ ./lldp_topo.py -v -e user1@server1 user2@server2
+```
+
 ## Requirements
 
 - Python3
+- SSH access with public/private key to the servers to be polled.

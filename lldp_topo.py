@@ -125,6 +125,97 @@ def test_ssh_lldpcli(servers_list, ssh_command=None):
     return test_output
 
 
+def get_iface_info(server, interface, extra_pf_info=False, ssh_command=None):
+    VENDOR_DEVICE_MAPPING = {
+        "0x8086": {
+            "vendor_name": "Intel",
+            "devices": {
+                "0x10fb": "Niantic IXGBE 82599 SFP",
+                "0x1016": "e1000 82540EP_LOM",
+                "0x1521": "e1000 I350 Copper",
+                "0x1528": "Twinville IXGBE X540T",
+                "0x154d": "Niantic IXGBE 82599 SFP_SF2",
+                "0x1572": "Fortville XL710 SFP",
+                "0x1583": "Fortville XL710 QSFP_A",
+                "0x1584": "Fortville XL710 QSFP_B",
+                "0x1585": "Fortville XL710 QSFP_C",
+            }
+        },
+        "0x15b3": {
+            "vendor_name": "Mellanox",
+            "devices": {
+                "0x1015": "Mellanox NIC",
+                "0x1016": "Mellanox NIC",
+            }
+        },
+        "0x14e4":  {
+            "vendor_name": "Broadcom",
+            "devices": {
+                "0x1657": "BCM5719"
+            }
+        },
+    }
+    # More vendor_ids in this link:
+    # https://pci-ids.ucw.cz/read/PC
+    # More device_ids in this link:
+    # https://doc.dpdk.org/api-2.2/rte__pci__dev__ids_8h_source.html
+
+    try:
+        iface_info = {}
+
+        command = f'iface_type="pf"; [ -d "/sys/class/net/{interface}/device/physfn" ] && iface_type="vf"; [ ! -d "/sys/class/net/{interface}/device" ] && iface_type="vlan"; echo $iface_type'
+        logger.debug(f"Command before SSH: {command}")
+        output = run_command(server, command, ssh_command)
+        iface_type = output.strip()
+        iface_info["type"] = iface_type
+        if iface_type == "pf" and extra_pf_info:
+            command = f"cat /sys/class/net/{interface}/device/device"
+            logger.debug(f"Command before SSH: {command}")
+            output = run_command(server, command, ssh_command)
+            device_id = output.strip()
+
+            command = f"cat /sys/class/net/{interface}/device/vendor"
+            logger.debug(f"Command before SSH: {command}")
+            output = run_command(server, command, ssh_command)
+            vendor_id = output.strip()
+
+            vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("vendor_name", "Unknown")
+            device_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("devices", {}).get(device_id, "Unknown")
+
+            command = f"cat /sys/class/net/{interface}/device/numa_node"
+            logger.debug(f"Command before SSH: {command}")
+            output = run_command(server, command, ssh_command)
+            numa_id = output.strip()
+
+            command = f"cat /sys/class/net/{interface}/speed"
+            logger.debug(f"Command before SSH: {command}")
+            output = run_command(server, command, ssh_command)
+            speed = output.strip()
+
+            command = f"cat /sys/class/net/{interface}/operstate"
+            logger.debug(f"Command before SSH: {command}")
+            output = run_command(server, command, ssh_command)
+            operstate = output.strip()
+
+            iface_info["device_id"] = device_id
+            iface_info["device_name"] = device_name
+            iface_info["vendor_id"] = vendor_id
+            iface_info["vendor_name"] = vendor_name
+            iface_info["numa_id"] = numa_id
+            iface_info["speed"] = speed
+            iface_info["operstate"] = operstate
+            iface_info["extra"] = f"{vendor_name},{vendor_id},{device_name},{device_id},{speed},{operstate}"
+    except Exception:
+        logger.info(print(f"Server {server}: {command} DID NOT WORK"))
+        e = traceback_format_exc()
+        logger.critical(
+            f"Server {server}: {command} DID NOT WORK. Exit Exception: {e}",
+            exc_info=True,
+        )
+        exit(1)
+    return iface_info
+
+
 def get_lldp_info(server, ssh_command=None):
     try:
         command = "lldpcli -f json show chassis details"
@@ -150,7 +241,6 @@ def get_lldp_info(server, ssh_command=None):
             exc_info=True,
         )
         exit(1)
-
     return chassis, interfaces, neighbors
 
 
@@ -244,6 +334,20 @@ if __name__ == "__main__":
         nargs="+",
         help="server to be connected in format `user@server`",
     )
+    parser.add_argument(
+        "-q",
+        "--quick",
+        default=False,
+        action="store_true",
+        help="print only LLDP neighbors, not all LLDP interfaces",
+    )
+    parser.add_argument(
+        "-e",
+        "--extra",
+        default=False,
+        action="store_true",
+        help="no extra info about server interfaces",
+    )
     args = parser.parse_args()
 
     # Initialize logger
@@ -255,6 +359,8 @@ if __name__ == "__main__":
         "ChassisID 1",
         "BRWS 1",
         "Iface 1",
+        "Iface 1 Type",
+        "Iface 1 Extra",
         "MAC 1",
         "Edge 2",
         "ChassisID 2",
@@ -271,9 +377,9 @@ if __name__ == "__main__":
         # Get LLDP info and append it to rows
         logger.info(f"Server: {server}")
         chassis, interfaces, neighbors = get_lldp_info(server, ssh_command=args.command)
-        logger.debug(f"Chassis: {yaml.safe_dump(chassis, indent=4, default_flow_style=False, sort_keys=False)}")
 
         # Get relevant fields from chassis
+        logger.debug(f"Chassis: {yaml.safe_dump(chassis, indent=4, default_flow_style=False, sort_keys=False)}")
         chassis_keys = list(chassis.get("local-chassis", {}).get("chassis", {}).keys())
         if len(chassis_keys) != 1:
             logger.error(f"More than 1 chassis found in server {server}")
@@ -296,23 +402,39 @@ if __name__ == "__main__":
                 exit(1)
             # Get relevant fields from interface
             iface1 = iface_keys[0]
-            if re.match("enp.*s.*f.*", iface1) or re.match("ens.*f.*", iface1):
-                logger.info(f"Skipping interface {iface1} since it is an SR-IOV interface")
-                continue
+            # if re.match("enp.*s.*f.*", iface1) or re.match("ens.*f.*", iface1):
+            #     logger.info(f"Skipping interface {iface1} since it is an SR-IOV interface")
+            #     continue
             mac1 = iface[iface1].get("port", {}).get("id", {}).get("value", "")
+
             # Get relevant fields from neighbors in interface iface1
             neighbor_info = neighbors_dict.get(iface1, {})
             edge2 = neighbor_info.get("chassis")
+            logger.debug(f"args.quick:{args.quick}")
+            logger.debug(f"edge2:{edge2}")
+            if args.quick and not edge2:
+                continue
             chassis_id2 = neighbor_info.get("chassis_id")
             brws2 = neighbor_info.get("brws")
             iface2 = neighbor_info.get("port")
 
+            # Get interface info from the server
+            iface1_info = get_iface_info(server, iface1, extra_pf_info=args.extra, ssh_command=args.command)
+            logger.info(f"Interface {iface1}: {iface1_info}")
+            iface1_type = iface1_info["type"]
+            if iface1_type != "pf":
+                continue
+            iface1_extra = "N/A"
+            if args.extra:
+                iface1_extra = iface1_info["extra"]
             rows.append(
                 [
                     edge1,
                     chassis_id1,
                     brws1,
                     iface1,
+                    iface1_type,
+                    iface1_extra,
                     mac1,
                     edge2,
                     chassis_id2,
