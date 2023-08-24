@@ -5,7 +5,6 @@ from prettytable import PrettyTable
 import json
 import logging
 import paramiko
-import re
 import subprocess
 from traceback import format_exc as traceback_format_exc
 from typing import Dict
@@ -144,21 +143,22 @@ def get_iface_info(server, interface, extra_pf_info=False, ssh_command=None):
                 "0x1583": "Fortville XL710 QSFP_A",
                 "0x1584": "Fortville XL710 QSFP_B",
                 "0x1585": "Fortville XL710 QSFP_C",
-                "0x37d2": "Ethernet Connection X722 for 10GBASE-T",
-            }
+                "0x158b": "Fortville XXV710 for 25GbE SFP28",
+                "0x37d2": "X722 for 10GBASE-T",
+            },
         },
         "0x15b3": {
             "vendor_name": "Mellanox",
             "devices": {
                 "0x1015": "Mellanox NIC",
                 "0x1016": "Mellanox NIC",
-            }
+            },
         },
-        "0x14e4":  {
+        "0x14e4": {
             "vendor_name": "Broadcom",
             "devices": {
-                "0x1657": "BCM5719"
-            }
+                "0x1657": "BCM5719",
+            },
         },
     }
     # More vendor_ids in this link:
@@ -169,7 +169,10 @@ def get_iface_info(server, interface, extra_pf_info=False, ssh_command=None):
     try:
         iface_info = {}
 
-        command = f'iface_type="pf"; [ -d "/sys/class/net/{interface}/device/physfn" ] && iface_type="vf"; [ ! -d "/sys/class/net/{interface}/device" ] && iface_type="vlan"; echo $iface_type'
+        command = (
+            f'iface_type="pf"; [ -d "/sys/class/net/{interface}/device/physfn" ] && iface_type="vf"; ',
+            f'[ ! -d "/sys/class/net/{interface}/device" ] && iface_type="vlan"; echo $iface_type',
+        )
         logger.debug(f"Command before SSH: {command}")
         output = run_command(server, command, ssh_command)
         iface_type = output.strip()

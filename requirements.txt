@@ -4,9 +4,9 @@ cffi==1.15.1
     # via
     #   cryptography
     #   pynacl
-cryptography==41.0.1
+cryptography==41.0.3
     # via paramiko
-paramiko==3.2.0
+paramiko==3.3.1
     # via -r requirements.in
 prettytable==3.8.0
     # via -r requirements.in
@@ -14,7 +14,7 @@ pycparser==2.21
     # via cffi
 pynacl==1.5.0
     # via paramiko
-pyyaml==6.0
+pyyaml==6.0.1
     # via -r requirements.in
 wcwidth==0.2.6
     # via prettytable
