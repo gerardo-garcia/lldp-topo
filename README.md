@@ -110,3 +110,5 @@ $ ./lldp_topo.py -v -e user1@server1 user2@server2
 
 - Python3
 - SSH access with public/private key to the servers to be polled.
+- LLDP running in the servers to be polled (`lldpcli` must be present)
+
