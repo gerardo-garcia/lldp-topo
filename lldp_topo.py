@@ -83,7 +83,11 @@ def run_command(server, command, ssh_command=None):
         client.connect(host, username=username)
         logger.info(f"Command: {command}")
         _stdin, _stdout, _stderr = client.exec_command(command)
-        logger.debug(f"Command: {command} completed")
+        _exit_status = _stdout.channel.recv_exit_status()
+        if _exit_status:
+            logger.info(f"Command: {command} failed")
+            raise Exception()
+        logger.info(f"Command: {command} completed successfully")
         # print(_stdout.read().decode())
         return _stdout.read().decode()
     else:
