@@ -150,8 +150,9 @@ def get_iface_info(server, interface, extra_pf_info=False, ssh_command=None):
         "0x15b3": {
             "vendor_name": "Mellanox",
             "devices": {
-                "0x1015": "Mellanox NIC",
-                "0x1016": "Mellanox NIC",
+                "0x1015": "MT27710 Family [ConnectX-4 Lx]",
+                "0x1016": "MT27710 Family [ConnectX-4 Lx Virtual Function]",
+                "0x1019": "MT28800 Family [ConnectX-5 Ex]",
             },
         },
         "0x14e4": {
