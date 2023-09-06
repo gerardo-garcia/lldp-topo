@@ -170,8 +170,8 @@ def get_iface_info(server, interface, extra_pf_info=False, ssh_command=None):
         iface_info = {}
 
         command = (
-            f'iface_type="pf"; [ -d "/sys/class/net/{interface}/device/physfn" ] && iface_type="vf"; ',
-            f'[ ! -d "/sys/class/net/{interface}/device" ] && iface_type="vlan"; echo $iface_type',
+            f'iface_type="pf"; [ -d "/sys/class/net/{interface}/device/physfn" ] && iface_type="vf"; '
+            + f'[ ! -d "/sys/class/net/{interface}/device" ] && iface_type="vlan"; echo $iface_type'
         )
         logger.debug(f"Command before SSH: {command}")
         output = run_command(server, command, ssh_command)
