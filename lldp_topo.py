@@ -281,7 +281,7 @@ def get_brws_capabilities(chassis):
     return brws
 
 
-def get_neighbors(neighbors):
+def parse_neighbors(neighbors):
     neighbor_dict = {}
     neighbor_list = neighbors.get("lldp", {}).get("interface", [])
     if isinstance(neighbor_list, Dict):
@@ -294,8 +294,37 @@ def get_neighbors(neighbors):
                 logger.error(f"Expected a single chassis in iface info. There are {len(chassis_keys)} keys: {chassis_keys}")
                 exit(1)
             chassis_name = chassis_keys[0]
-            chassis_id = chassis[chassis_name].get("id", {}).get("value", "UNKNOWN")
-            brws = get_brws_capabilities(chassis[chassis_name])
+            # Expected chassis:
+            # "chassis": {
+            #     "SW-DAT2": {
+            #         "id": {
+            #             "type": "mac",
+            #             "value": "0c:29:ef:c9:46:a0"
+            #         },
+            #     "capability": [ ...
+            #     ]
+            # }
+            # In some cases, the name of the chassis is not sent by the switch
+            # "chassis": {
+            #     "id": {
+            #         "type": "mac",
+            #         "value": "8c:04:ba:c1:b2:40"
+            #     }
+            # }
+            if chassis_name == "id":
+                chassis_id = chassis.get("id", {})
+                if chassis_id.get("type", "") == "mac" and chassis_id.get("value"):
+                    chassis_mac = chassis_id['value']
+                    chassis_id = chassis_mac
+                    # A name is generated based on the MAC address
+                    # chassis_name = f"mac-{chassis_mac}"
+                else:
+                    chassis_name = "UNKNOWN"
+                    chassis_id ="UNKNOWN"
+                brws = get_brws_capabilities(chassis)
+            else:
+                chassis_id = chassis[chassis_name].get("id", {}).get("value", "UNKNOWN")
+                brws = get_brws_capabilities(chassis[chassis_name])
             port = iface_info.get("port", {}).get("id", {}).get("value", "")
             neighbor_dict[iface_name] = {
                 "chassis": chassis_name,
@@ -403,7 +432,7 @@ if __name__ == "__main__":
 
         # Get relevant fields from neighbors and store them in neighbors_dict[iface]
         logger.debug(f"Neighbors: {yaml.safe_dump(neighbors, indent=4, default_flow_style=False, sort_keys=False)}")
-        neighbors_dict = get_neighbors(neighbors)
+        neighbors_dict = parse_neighbors(neighbors)
 
         # Iterate over interfaces and get relevant fields from interfaces and the associated neighbor
         logger.debug(f"Interfaces: {yaml.safe_dump(interfaces, indent=4, default_flow_style=False, sort_keys=False)}")
@@ -422,6 +451,7 @@ if __name__ == "__main__":
 
             # Get relevant fields from neighbors in interface iface1
             neighbor_info = neighbors_dict.get(iface1, {})
+            logger.debug(f"neighbor_info:{neighbor_info}")
             edge2 = neighbor_info.get("chassis")
             logger.debug(f"args.quick:{args.quick}")
             logger.debug(f"edge2:{edge2}")

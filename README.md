@@ -1,6 +1,6 @@
 # lldp-topo
 
-This program takes as input a list of nodes to be connected via ssh (pubkey has been injected in the node) and provides as output a table with the list of links, printing them in a table or CSV format.
+This program takes as input a list of servers to be contacted via ssh (pubkey has been injected in the server) and provides as output a table with the list of links of those servers to existing switches (if any), printing them in a table or CSV format.
 
 The program assumes that you can access via ssh to the list of nodes/servers and they have lldpd running (the command lldpcli must be available).
 
@@ -22,21 +22,19 @@ The information about iface type and iface extra is obtained from the server, ru
 
 ```bash
 $ ./lldp_topo.py -h
-usage: lldp_topo.py [-h] [-o {table,csv,yaml,json}] [-v] [--test] [-c COMMAND]
-                    SERVER [SERVER ...]
+usage: lldp_topo.py [-h] [-o {table,csv,yaml,json}] [-v] [--test] [-c COMMAND] [-q] [-e] SERVER [SERVER ...]
 
 positional arguments:
   SERVER                server to be connected in format `user@server`
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -o {table,csv,yaml,json}, --output {table,csv,yaml,json}
                         output format
   -v, --verbose         increase output verbosity
   --test                only test ssh connectivity and lldpcli
   -c COMMAND, --command COMMAND
-                        alternative command to connect to servers via ssh,
-                        e.g. `juju ssh`
+                        alternative command to connect to servers via ssh, e.g. `juju ssh`
   -q, --quick           print only LLDP neighbors, not all LLDP interfaces
   -e, --extra           no extra info about server interfaces
 ```
