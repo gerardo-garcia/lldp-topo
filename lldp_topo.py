@@ -148,8 +148,9 @@ def run_command_list(server, command_list, ssh_command=None):
             # _stderr = result.stderr
             answer_list.append(_stdout.decode())
     if len(command_list) != len(answer_list):
-        logger.warning('Length of command list executed via SSH does not match length of answers')
+        logger.warning("Length of command list executed via SSH does not match length of answers")
     return answer_list
+
 
 def test_ssh_lldpcli(servers_list, ssh_command=None):
     test_output = 0
@@ -228,27 +229,27 @@ def map_vendor_device_id(vendor_id, device_id):
 
 
 def get_extra_ifaces_info(server, interface_list, iface_info_dict, ssh_command):
-    '''
+    """
     Get extra information from the list of physical interfaces (interface_list)
     of a server (server) via SSH (or alternative ssh_command)
     and store the inforamtion in iface_info_dict
-    '''
+    """
     command_list = []
     for interface in interface_list:
         command_list.extend(get_iface_cmd_list(interface))
     answers = run_command_list(server, command_list, ssh_command)
     if len(answers) != len(command_list):
-        logger.warning('Length of command list executed via SSH does not match length of answers')
+        logger.warning("Length of command list executed via SSH does not match length of answers")
 
-    answer_index=0
+    answer_index = 0
     for interface in interface_list:
         device_id = answers[answer_index].strip()
-        vendor_id = answers[answer_index+1].strip()
+        vendor_id = answers[answer_index + 1].strip()
         vendor_name, device_name = map_vendor_device_id(vendor_id, device_id)
-        numa_id = answers[answer_index+2].strip()
-        speed = answers[answer_index+3].strip()
-        operstate = answers[answer_index+4].strip()
-        numvfs = answers[answer_index+5].strip()
+        numa_id = answers[answer_index + 2].strip()
+        speed = answers[answer_index + 3].strip()
+        operstate = answers[answer_index + 4].strip()
+        numvfs = answers[answer_index + 5].strip()
         answer_index += 6
         iface_info = iface_info_dict[interface]
         iface_info["device_id"] = device_id
@@ -278,7 +279,7 @@ def get_ifaces_info(server, interface_list, extra_pf_info=False, ssh_command=Non
         logger.debug(f"Command list: {command_list}")
         answer_list = run_command_list(server, command_list, ssh_command)
         if len(command_list) != len(answer_list):
-            logger.warning('Length of command list executed via SSH does not match length of answers')
+            logger.warning("Length of command list executed via SSH does not match length of answers")
         # Store in iface_dict all interfaces with its type
         # At the same time, generate a list of pf-type interfaces
         physical_iface_list = []
@@ -303,7 +304,6 @@ def get_ifaces_info(server, interface_list, extra_pf_info=False, ssh_command=Non
             exc_info=True,
         )
         exit(1)
-    return iface_info_list
 
 
 def get_lldp_info(server, ssh_command=None):
@@ -393,13 +393,13 @@ def parse_neighbors(neighbors):
             if chassis_name == "id":
                 chassis_id = chassis.get("id", {})
                 if chassis_id.get("type", "") == "mac" and chassis_id.get("value"):
-                    chassis_mac = chassis_id['value']
+                    chassis_mac = chassis_id["value"]
                     chassis_id = chassis_mac
                     # A name is generated based on the MAC address
                     # chassis_name = f"mac-{chassis_mac}"
                 else:
                     chassis_name = "UNKNOWN"
-                    chassis_id ="UNKNOWN"
+                    chassis_id = "UNKNOWN"
                 brws = get_brws_capabilities(chassis)
             else:
                 chassis_id = chassis[chassis_name].get("id", {}).get("value", "UNKNOWN")
@@ -424,6 +424,7 @@ topo = {}
 # Subcommands
 ####################################
 
+
 def get_topo_subcmd(args):
     # Initialize variables
     headers = [
@@ -441,7 +442,7 @@ def get_topo_subcmd(args):
     ]
     rows = []
 
-    # Go through the list of servers and 
+    # Go through the list of servers and
     for server in args.servers_list:
         # Get LLDP info and append it to rows
         logger.info(f"Server: {server}")
@@ -558,7 +559,6 @@ def list_interfaces_subcmd(args):
         # Get LLDP info and append it to rows
         interface_list = get_interface_list(server, ssh_command=args.alt_command)
         interface_list2 = []
-        command_list = []
         # Get type of interface
         for iface_index in range(len(interface_list)):
             interface_name = interface_list[iface_index]["ifname"]
@@ -588,12 +588,13 @@ def list_interfaces_subcmd(args):
 
     print_table(headers, rows, args.output)
 
+
 ####################################
 # Main
 ####################################
 if __name__ == "__main__":
     # Argument parse
-    main_parser = argparse.ArgumentParser(prog='lldp_topo.py')
+    main_parser = argparse.ArgumentParser(prog="lldp_topo.py")
     main_parser.add_argument(
         "-o",
         "--output",
@@ -626,18 +627,18 @@ if __name__ == "__main__":
 
     # Add subparser for subcommands
     subparsers = main_parser.add_subparsers(
-                    dest='sub_args',
-                    title='subcommands',
-                    # description='get-topology (alias: get, gt), list-interfaces (alias: li)',
-                    )
+        dest="sub_args",
+        title="subcommands",
+        # description='get-topology (alias: get, gt), list-interfaces (alias: li)',
+    )
 
     # Subparsers for the different commands
     # parser_get_topo = argparse.ArgumentParser()
     parser_get_topo = subparsers.add_parser(
-                        'get-topology',
-                        help='get LLDP topology',
-                        aliases=['gt', 'get'],
-                        )
+        "get-topology",
+        help="get LLDP topology",
+        aliases=["gt", "get"],
+    )
     parser_get_topo.add_argument(
         "servers_list",
         metavar="SERVER",
@@ -661,10 +662,10 @@ if __name__ == "__main__":
     )
     # parser_list_interfaces = argparse.ArgumentParser()
     parser_list_interfaces = subparsers.add_parser(
-                                'list-interfaces',
-                                help='list physical interfaces and their info',
-                                aliases=['li'],
-                                )
+        "list-interfaces",
+        help="list physical interfaces and their info",
+        aliases=["li"],
+    )
     parser_list_interfaces.add_argument(
         "servers_list",
         metavar="SERVER",
@@ -672,7 +673,7 @@ if __name__ == "__main__":
         nargs="+",
         help="server to be connected in format `user@server`",
     )
-   
+
     # Parse args, allowing global options to reach subparsers
     # From <https://stackoverflow.com/questions/46962065/add-top-level-argparse-arguments-after-subparser-args>
     ns, extras = main_parser.parse_known_args()
@@ -689,9 +690,9 @@ if __name__ == "__main__":
         test_output = test_ssh_lldpcli(args.servers_list, ssh_command=args.alt_command)
         exit(test_output)
 
-    if args.sub_args in ['get-topology', 'gt', 'get']:
+    if args.sub_args in ["get-topology", "gt", "get"]:
         get_topo_subcmd(args)
-    elif args.sub_args in ['list-interfaces', 'li']:
+    elif args.sub_args in ["list-interfaces", "li"]:
         list_interfaces_subcmd(args)
     else:
         raise Exception("Subcommand not implemented")
