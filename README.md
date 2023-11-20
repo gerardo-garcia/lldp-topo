@@ -22,10 +22,7 @@ The information about iface type and iface extra is obtained from the server, ru
 
 ```bash
 $ ./lldp_topo.py -h
-usage: lldp_topo.py [-h] [-o {table,csv,yaml,json}] [-v] [--test] [-c COMMAND] [-q] [-e] SERVER [SERVER ...]
-
-positional arguments:
-  SERVER                server to be connected in format `user@server`
+usage: lldp_topo.py [-h] [-o {table,csv,yaml,json}] [-v] [--test] [-c ALT_COMMAND] {get-topology,gt,get,list-interfaces,li} ...
 
 options:
   -h, --help            show this help message and exit
@@ -33,16 +30,42 @@ options:
                         output format
   -v, --verbose         increase output verbosity
   --test                only test ssh connectivity and lldpcli
-  -c COMMAND, --command COMMAND
+  -c ALT_COMMAND, --alt-command ALT_COMMAND
                         alternative command to connect to servers via ssh, e.g. `juju ssh`
-  -q, --quick           print only LLDP neighbors, not all LLDP interfaces
-  -e, --extra           no extra info about server interfaces
+
+subcommands:
+  {get-topology,gt,get,list-interfaces,li}
+    get-topology (gt, get)
+                        get LLDP topology
+    list-interfaces (li)
+                        list physical interfaces and their info
+
+$ ./lldp_topo.py get-topology -h
+usage: lldp_topo.py get-topology [-h] [-q] [-e] SERVER [SERVER ...]
+
+positional arguments:
+  SERVER       server to be connected in format `user@server`
+
+options:
+  -h, --help   show this help message and exit
+  -q, --quick  print only LLDP neighbors, not all LLDP interfaces
+  -e, --extra  no extra info about server interfaces
+
+$ ./lldp_topo.py list-interfaces -h
+usage: lldp_topo.py list-interfaces [-h] SERVER [SERVER ...]
+
+positional arguments:
+  SERVER      server to be connected in format `user@server`
+
+options:
+  -h, --help  show this help message and exit
+
 ```
 
 To get LLDP topology from a list of servers:
 
 ```bash
-$ ./lldp_topo.py user1@server1 user2@server2
+$ ./lldp_topo.py get-topology user1@server1 user2@server2
 +------------+--------+------------+-------------------+----------------+--------+---------------------------+
 | Edge 1     | BRWS 1 | Iface 1    | MAC 1             | Edge 2         | BRWS 2 | Iface 2                   |
 +------------+--------+------------+-------------------+----------------+--------+---------------------------+
@@ -68,7 +91,7 @@ $ ./lldp_topo.py user1@server1 user2@server2
 The same in CSV format:
 
 ```bash
-$ ./lldp_topo.py -o csv user1@server1 user2@server2
+$ ./lldp_topo.py get-topology -o csv user1@server1 user2@server2
 Edge 1;BRWS 1;Iface 1;MAC 1;Edge 2;BRWS 2;Iface 2
 server1;1100;ens3f0;68:05:ca:38:6c:50;None;None;None
 server1;1100;eno1;d0:67:26:cc:f0:ea;switch1;11XX;Ten-GigabitEthernet2/0/9
@@ -91,7 +114,7 @@ server2;0001;eno4;d0:67:26:cc:f5:97;switch1;11XX;Ten-GigabitEthernet2/0/8
 To test SSH access to the machines and check that LLDP works in that machine, run:
 
 ```bash
-$ ./lldp_topo.py --test user1@server1 user2@server2
+$ ./lldp_topo.py --test get-topology user1@server1 user2@server2
 Server user1@server1: SSH working
 Server user1@server1: LLDPCLI working
 Server user2@server2: SSH working
@@ -101,7 +124,13 @@ Server user2@server2: LLDPCLI working
 The recommended procedure to troubleshoot any problem is to use option `-v`, which logs commands used to get LLDP information, and the option `-e` which gives us extra information about the interface.
 
 ```bash
-$ ./lldp_topo.py -v -e user1@server1 user2@server2
+$ ./lldp_topo.py get-topology -v -e user1@server1 user2@server2
+```
+
+To get the list of physical interfaces and their info:
+
+```bash
+$ ./lldp_topo.py list-interfaces user1@server1 user2@server2
 ```
 
 ## Requirements
@@ -109,4 +138,3 @@ $ ./lldp_topo.py -v -e user1@server1 user2@server2
 - Python3
 - SSH access with public/private key to the servers to be polled.
 - LLDP running in the servers to be polled (`lldpcli` must be present)
-

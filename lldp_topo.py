@@ -9,6 +9,7 @@ import subprocess
 from traceback import format_exc as traceback_format_exc
 from typing import Dict
 import yaml
+from os import linesep
 
 
 ####################################
@@ -73,7 +74,7 @@ def set_logger(verbose):
 
 
 def run_command(server, command, ssh_command=None):
-    logger.info(f"Server: {server}")
+    logger.debug(f"Server: {server}")
     if not ssh_command:
         server_fields = server.split("@")
         username = server_fields[0]
@@ -81,11 +82,11 @@ def run_command(server, command, ssh_command=None):
         client = paramiko.client.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         client.connect(host, username=username)
-        logger.info(f"Command: {command}")
+        logger.debug(f"Command: {command}")
         _stdin, _stdout, _stderr = client.exec_command(command)
         _exit_status = _stdout.channel.recv_exit_status()
         if _exit_status:
-            logger.info(f"Command: {command} failed")
+            logger.error(f"Command: {command} failed")
             raise Exception()
         logger.info(f"Command: {command} completed successfully")
         # print(_stdout.read().decode())
@@ -108,6 +109,48 @@ def run_command(server, command, ssh_command=None):
         return _stdout.decode()
 
 
+def run_command_list(server, command_list, ssh_command=None):
+    logger.info(f"Server: {server}")
+    logger.info(f"Command list:{linesep}{linesep.join(command_list)}")
+    answer_list = []
+    if not ssh_command:
+        server_fields = server.split("@")
+        username = server_fields[0]
+        host = server_fields[1]
+        client = paramiko.client.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(host, username=username)
+        for command in command_list:
+            logger.debug(f"Command: {command}")
+            _stdin, _stdout, _stderr = client.exec_command(command)
+            _exit_status = _stdout.channel.recv_exit_status()
+            if _exit_status:
+                logger.error(f"Command: {command} failed")
+                raise Exception()
+            logger.debug(f"Command: {command} completed successfully")
+            # print(_stdout.read().decode())
+            answer_list.append(_stdout.read().decode())
+    else:
+        for command in command_list:
+            subprocess_cmd = f"{ssh_command} {server} {command}"
+            logger.info(f"Command: {subprocess_cmd}")
+            result = subprocess.run(
+                subprocess_cmd,
+                shell=True,
+                check=True,
+                # Required for python<3.7
+                stdout=subprocess.PIPE,
+                # These 2 lines can be uncommented for python>=3.7
+                # capture_output=True,
+                # text=True,
+            )
+            _stdout = result.stdout
+            # _stderr = result.stderr
+            answer_list.append(_stdout.decode())
+    if len(command_list) != len(answer_list):
+        logger.warning('Length of command list executed via SSH does not match length of answers')
+    return answer_list
+
 def test_ssh_lldpcli(servers_list, ssh_command=None):
     test_output = 0
     for server in servers_list:
@@ -129,7 +172,19 @@ def test_ssh_lldpcli(servers_list, ssh_command=None):
     return test_output
 
 
-def get_iface_info(server, interface, extra_pf_info=False, ssh_command=None):
+def get_iface_cmd_list(interface):
+    iface_cmd_list = [
+        f"cat /sys/class/net/{interface}/device/device",
+        f"cat /sys/class/net/{interface}/device/vendor",
+        f"cat /sys/class/net/{interface}/device/numa_node",
+        f"cat /sys/class/net/{interface}/speed || echo UNKNOWN",
+        f"cat /sys/class/net/{interface}/operstate || echo UNKNOWN",
+        f"cat /sys/class/net/{interface}/device/sriov_numvfs || echo UNKNOWN",
+    ]
+    return iface_cmd_list
+
+
+def map_vendor_device_id(vendor_id, device_id):
     VENDOR_DEVICE_MAPPING = {
         "0x8086": {
             "vendor_name": "Intel",
@@ -167,54 +222,79 @@ def get_iface_info(server, interface, extra_pf_info=False, ssh_command=None):
     # More device_ids in this link:
     # https://doc.dpdk.org/api-2.2/rte__pci__dev__ids_8h_source.html
 
+    vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("vendor_name", "Unknown")
+    vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("devices", {}).get(device_id, "Unknown")
+    return vendor_name, vendor_name
+
+
+def get_extra_ifaces_info(server, interface_list, iface_info_dict, ssh_command):
+    '''
+    Get extra information from the list of physical interfaces (interface_list)
+    of a server (server) via SSH (or alternative ssh_command)
+    and store the inforamtion in iface_info_dict
+    '''
+    command_list = []
+    for interface in interface_list:
+        command_list.extend(get_iface_cmd_list(interface))
+    answers = run_command_list(server, command_list, ssh_command)
+    if len(answers) != len(command_list):
+        logger.warning('Length of command list executed via SSH does not match length of answers')
+
+    answer_index=0
+    for interface in interface_list:
+        device_id = answers[answer_index].strip()
+        vendor_id = answers[answer_index+1].strip()
+        vendor_name, device_name = map_vendor_device_id(vendor_id, device_id)
+        numa_id = answers[answer_index+2].strip()
+        speed = answers[answer_index+3].strip()
+        operstate = answers[answer_index+4].strip()
+        numvfs = answers[answer_index+5].strip()
+        answer_index += 6
+        iface_info = iface_info_dict[interface]
+        iface_info["device_id"] = device_id
+        iface_info["device_name"] = device_name
+        iface_info["vendor_id"] = vendor_id
+        iface_info["vendor_name"] = vendor_name
+        iface_info["numa_id"] = numa_id
+        iface_info["speed"] = speed
+        iface_info["operstate"] = operstate
+        iface_info["numvfs"] = numvfs
+        iface_info["extra"] = f"{vendor_name},{vendor_id},{device_name},{device_id},{speed},{operstate},{numvfs}"
+        iface_info_dict[interface] = iface_info
+
+
+def get_ifaces_info(server, interface_list, extra_pf_info=False, ssh_command=None):
     try:
-        iface_info = {}
+        iface_dict = {}
+        command_list = []
+        # Generate list of commands to know iface type for each interface
+        for interface in interface_list:
+            command = (
+                f'iface_type="pf"; [ -d "/sys/class/net/{interface}/device/physfn" ] && iface_type="vf"; '
+                + f'[ ! -d "/sys/class/net/{interface}/device" ] && iface_type="vlan"; echo $iface_type'
+            )
+            command_list.append(command)
+        # Run list of commands in a single SSH session to know type of each interface
+        logger.debug(f"Command list: {command_list}")
+        answer_list = run_command_list(server, command_list, ssh_command)
+        if len(command_list) != len(answer_list):
+            logger.warning('Length of command list executed via SSH does not match length of answers')
+        # Store in iface_dict all interfaces with its type
+        # At the same time, generate a list of pf-type interfaces
+        physical_iface_list = []
+        for iface_index in range(len(interface_list)):
+            iface_name = interface_list[iface_index]
+            iface_type = answer_list[iface_index].strip()
+            if iface_type == "pf":
+                physical_iface_list.append(iface_name)
+            iface_dict[iface_name] = {
+                "type": iface_type,
+            }
+        # Get extra information for all PF interfaces
+        if extra_pf_info:
+            get_extra_ifaces_info(server, physical_iface_list, iface_dict, ssh_command)
+        return iface_dict
 
-        command = (
-            f'iface_type="pf"; [ -d "/sys/class/net/{interface}/device/physfn" ] && iface_type="vf"; '
-            + f'[ ! -d "/sys/class/net/{interface}/device" ] && iface_type="vlan"; echo $iface_type'
-        )
-        logger.debug(f"Command before SSH: {command}")
-        output = run_command(server, command, ssh_command)
-        iface_type = output.strip()
-        iface_info["type"] = iface_type
-        if iface_type == "pf" and extra_pf_info:
-            command = f"cat /sys/class/net/{interface}/device/device"
-            logger.debug(f"Command before SSH: {command}")
-            output = run_command(server, command, ssh_command)
-            device_id = output.strip()
-
-            command = f"cat /sys/class/net/{interface}/device/vendor"
-            logger.debug(f"Command before SSH: {command}")
-            output = run_command(server, command, ssh_command)
-            vendor_id = output.strip()
-
-            vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("vendor_name", "Unknown")
-            device_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("devices", {}).get(device_id, "Unknown")
-
-            command = f"cat /sys/class/net/{interface}/device/numa_node"
-            logger.debug(f"Command before SSH: {command}")
-            output = run_command(server, command, ssh_command)
-            numa_id = output.strip()
-
-            command = f"cat /sys/class/net/{interface}/speed || echo UNKNOWN"
-            logger.debug(f"Command before SSH: {command}")
-            output = run_command(server, command, ssh_command)
-            speed = output.strip()
-
-            command = f"cat /sys/class/net/{interface}/operstate || echo UNKNOWN"
-            logger.debug(f"Command before SSH: {command}")
-            output = run_command(server, command, ssh_command)
-            operstate = output.strip()
-
-            iface_info["device_id"] = device_id
-            iface_info["device_name"] = device_name
-            iface_info["vendor_id"] = vendor_id
-            iface_info["vendor_name"] = vendor_name
-            iface_info["numa_id"] = numa_id
-            iface_info["speed"] = speed
-            iface_info["operstate"] = operstate
-            iface_info["extra"] = f"{vendor_name},{vendor_id},{device_name},{device_id},{speed},{operstate}"
     except Exception:
         logger.info(print(f"Server {server}: {command} DID NOT WORK"))
         e = traceback_format_exc()
@@ -223,25 +303,24 @@ def get_iface_info(server, interface, extra_pf_info=False, ssh_command=None):
             exc_info=True,
         )
         exit(1)
-    return iface_info
+    return iface_info_list
 
 
 def get_lldp_info(server, ssh_command=None):
     try:
-        command = "lldpcli -f json show chassis details"
-        logger.info(f"LLDP command: {command}")
-        output = run_command(server, command, ssh_command)
-        chassis = yaml.safe_load(output)
+        commands = [
+            "lldpcli -f json show chassis details",
+            "lldpcli -f json show interfaces details",
+            "lldpcli -f json show neighbors details",
+        ]
+        for command in commands:
+            logger.info(f"LLDP command: {command}")
+        answers = run_command_list(server, commands, ssh_command)
+        chassis = yaml.safe_load(answers[0])
         logger.debug(f"Server {server}. Chassis: {chassis}")
-        logger.info(f"LLDP command: {command}")
-        command = "lldpcli -f json show interfaces details"
-        output = run_command(server, command, ssh_command)
-        interfaces = yaml.safe_load(output)
+        interfaces = yaml.safe_load(answers[1])
         logger.debug(f"Server {server}. Interfaces: {interfaces}")
-        logger.info(f"LLDP command: {command}")
-        command = "lldpcli -f json show neighbors details"
-        output = run_command(server, command, ssh_command)
-        neighbors = yaml.safe_load(output)
+        neighbors = yaml.safe_load(answers[2])
         logger.debug(f"Server {server}. Neighbors: {neighbors}")
     except Exception:
         logger.info(print(f"Server {server}: {command} DID NOT WORK"))
@@ -342,59 +421,10 @@ def parse_neighbors(neighbors):
 topo = {}
 
 ####################################
-# Main
+# Subcommands
 ####################################
-if __name__ == "__main__":
-    # Argument parse
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-o",
-        "--output",
-        choices=["table", "csv", "yaml", "json"],
-        default="table",
-        help="output format",
-    )
-    parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
-    parser.add_argument(
-        "--test",
-        default=False,
-        action="store_true",
-        help="only test ssh connectivity and lldpcli",
-    )
-    parser.add_argument(
-        "-c",
-        "--command",
-        type=str,
-        action="store",
-        default=None,
-        help="alternative command to connect to servers via ssh, e.g. `juju ssh`",
-    )
-    parser.add_argument(
-        "servers_list",
-        metavar="SERVER",
-        type=str,
-        nargs="+",
-        help="server to be connected in format `user@server`",
-    )
-    parser.add_argument(
-        "-q",
-        "--quick",
-        default=False,
-        action="store_true",
-        help="print only LLDP neighbors, not all LLDP interfaces",
-    )
-    parser.add_argument(
-        "-e",
-        "--extra",
-        default=False,
-        action="store_true",
-        help="no extra info about server interfaces",
-    )
-    args = parser.parse_args()
 
-    # Initialize logger
-    set_logger(args.verbose)
-
+def get_topo_subcmd(args):
     # Initialize variables
     headers = [
         "Edge 1",
@@ -411,14 +441,11 @@ if __name__ == "__main__":
     ]
     rows = []
 
-    if args.test:
-        # Test SSH and LLDPCLI and exits
-        test_output = test_ssh_lldpcli(args.servers_list, ssh_command=args.command)
-        exit(test_output)
+    # Go through the list of servers and 
     for server in args.servers_list:
         # Get LLDP info and append it to rows
         logger.info(f"Server: {server}")
-        chassis, interfaces, neighbors = get_lldp_info(server, ssh_command=args.command)
+        chassis, interfaces, neighbors = get_lldp_info(server, ssh_command=args.alt_command)
 
         # Get relevant fields from chassis
         logger.debug(f"Chassis: {yaml.safe_dump(chassis, indent=4, default_flow_style=False, sort_keys=False)}")
@@ -439,8 +466,8 @@ if __name__ == "__main__":
         interface_list = interfaces.get("lldp", {}).get("interface", [])
         for iface in interface_list:
             iface_keys = list(iface.keys())
-            if len(chassis_keys) != 1:
-                logger.error(f"Expected a single key in iface dict. There are {len(chassis_keys)} keys: {iface_keys}")
+            if len(iface_keys) != 1:
+                logger.error(f"Expected a single key in iface dict. There are {len(iface_keys)} keys: {iface_keys}")
                 exit(1)
             # Get relevant fields from interface
             iface1 = iface_keys[0]
@@ -462,7 +489,8 @@ if __name__ == "__main__":
             iface2 = neighbor_info.get("port")
 
             # Get interface info from the server
-            iface1_info = get_iface_info(server, iface1, extra_pf_info=args.extra, ssh_command=args.command)
+            iface1_info_dict = get_ifaces_info(server, [iface1], extra_pf_info=args.extra, ssh_command=args.alt_command)
+            iface1_info = iface1_info_dict[iface1]
             logger.info(f"Interface {iface1}: {iface1_info}")
             iface1_type = iface1_info["type"]
             if iface1_type != "pf":
@@ -487,3 +515,183 @@ if __name__ == "__main__":
             rows.append(new_row)
 
     print_table(headers, rows, args.output)
+
+
+def get_interface_list(server, ssh_command):
+    try:
+        commands = [
+            "ip -j link list",
+        ]
+        answers = run_command_list(server, commands, ssh_command)
+        interfaces = yaml.safe_load(answers[0])
+        logger.debug(f"Server {server}. Interfaces: {interfaces}")
+    except Exception:
+        logger.info(print(f"Server {server}: One command of {commands} DID NOT WORK"))
+        e = traceback_format_exc()
+        logger.critical(
+            f"Server {server}: One command of {commands} DID NOT WORK. Exit Exception: {e}",
+            exc_info=True,
+        )
+        exit(1)
+    return interfaces
+
+
+def list_interfaces_subcmd(args):
+    # Initialize variables
+    headers = [
+        "Server",
+        "Iface",
+        "Type",
+        "Device ID",
+        "Device Name",
+        "Vendor ID",
+        "Vendor Name",
+        "Numa ID",
+        "Speed",
+        "Oper State",
+        "Num VFs",
+    ]
+    rows = []
+
+    # Go through the list of servers and get iface info
+    for server in args.servers_list:
+        # Get LLDP info and append it to rows
+        interface_list = get_interface_list(server, ssh_command=args.alt_command)
+        interface_list2 = []
+        command_list = []
+        # Get type of interface
+        for iface_index in range(len(interface_list)):
+            interface_name = interface_list[iface_index]["ifname"]
+            interface_list2.append(interface_name)
+        iface_info_dict = {}
+        iface_info_dict = get_ifaces_info(server, interface_list2, extra_pf_info=True, ssh_command=args.alt_command)
+        logger.info(yaml.safe_dump(iface_info_dict, indent=4, default_flow_style=False, sort_keys=False))
+
+        for iface in iface_info_dict:
+            if iface_info_dict[iface]["type"] != "pf":
+                continue
+            new_row = [
+                server,
+                iface,
+                iface_info_dict[iface]["type"],
+                iface_info_dict[iface]["device_id"],
+                iface_info_dict[iface]["device_name"],
+                iface_info_dict[iface]["vendor_id"],
+                iface_info_dict[iface]["vendor_name"],
+                iface_info_dict[iface]["numa_id"],
+                iface_info_dict[iface]["speed"],
+                iface_info_dict[iface]["operstate"],
+                iface_info_dict[iface]["numvfs"],
+            ]
+            logger.info(f"New row: {new_row}")
+            rows.append(new_row)
+
+    print_table(headers, rows, args.output)
+
+####################################
+# Main
+####################################
+if __name__ == "__main__":
+    # Argument parse
+    main_parser = argparse.ArgumentParser(prog='lldp_topo.py')
+    main_parser.add_argument(
+        "-o",
+        "--output",
+        choices=["table", "csv", "yaml", "json"],
+        default="table",
+        help="output format",
+    )
+    main_parser.add_argument("-v", "--verbose", action="count", default=0, help="increase output verbosity")
+    main_parser.add_argument(
+        "--test",
+        default=False,
+        action="store_true",
+        help="only test ssh connectivity and lldpcli",
+    )
+    main_parser.add_argument(
+        "-c",
+        "--alt-command",
+        type=str,
+        action="store",
+        default=None,
+        help="alternative command to connect to servers via ssh, e.g. `juju ssh`",
+    )
+    # main_parser.add_argument(
+    #     "servers_list",
+    #     metavar="SERVER",
+    #     type=str,
+    #     nargs="?",
+    #     help="server to be connected in format `user@server`",
+    # )
+
+    # Add subparser for subcommands
+    subparsers = main_parser.add_subparsers(
+                    dest='sub_args',
+                    title='subcommands',
+                    # description='get-topology (alias: get, gt), list-interfaces (alias: li)',
+                    )
+
+    # Subparsers for the different commands
+    # parser_get_topo = argparse.ArgumentParser()
+    parser_get_topo = subparsers.add_parser(
+                        'get-topology',
+                        help='get LLDP topology',
+                        aliases=['gt', 'get'],
+                        )
+    parser_get_topo.add_argument(
+        "servers_list",
+        metavar="SERVER",
+        type=str,
+        nargs="+",
+        help="server to be connected in format `user@server`",
+    )
+    parser_get_topo.add_argument(
+        "-q",
+        "--quick",
+        default=False,
+        action="store_true",
+        help="print only LLDP neighbors, not all LLDP interfaces",
+    )
+    parser_get_topo.add_argument(
+        "-e",
+        "--extra",
+        default=False,
+        action="store_true",
+        help="no extra info about server interfaces",
+    )
+    # parser_list_interfaces = argparse.ArgumentParser()
+    parser_list_interfaces = subparsers.add_parser(
+                                'list-interfaces',
+                                help='list physical interfaces and their info',
+                                aliases=['li'],
+                                )
+    parser_list_interfaces.add_argument(
+        "servers_list",
+        metavar="SERVER",
+        type=str,
+        nargs="+",
+        help="server to be connected in format `user@server`",
+    )
+   
+    # Parse args, allowing global options to reach subparsers
+    # From <https://stackoverflow.com/questions/46962065/add-top-level-argparse-arguments-after-subparser-args>
+    ns, extras = main_parser.parse_known_args()
+    # print(ns)
+    # print(extras)
+    args = main_parser.parse_args(extras, ns)
+    # print(args)
+
+    # Initialize logger
+    set_logger(args.verbose)
+
+    # If option test is set, then Test SSH and LLDPCLI and exits
+    if args.test:
+        test_output = test_ssh_lldpcli(args.servers_list, ssh_command=args.alt_command)
+        exit(test_output)
+
+    if args.sub_args in ['get-topology', 'gt', 'get']:
+        get_topo_subcmd(args)
+    elif args.sub_args in ['list-interfaces', 'li']:
+        list_interfaces_subcmd(args)
+    else:
+        raise Exception("Subcommand not implemented")
