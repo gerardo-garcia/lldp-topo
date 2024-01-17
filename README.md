@@ -138,3 +138,8 @@ $ ./lldp_topo.py list-interfaces user1@server1 user2@server2
 - Python3
 - SSH access with public/private key to the servers to be polled.
 - LLDP running in the servers to be polled (`lldpcli` must be present)
+
+## Future additions
+
+- Print PCI address and NUMA Node for each compute interface
+
