@@ -215,6 +215,9 @@ def map_vendor_device_id(vendor_id, device_id):
             "vendor_name": "Broadcom",
             "devices": {
                 "0x1657": "BCM5719",
+                "0x165f": "BCM5120",
+                "0x16d6": "BCM-57412 NextXtreme-E",
+                "0x16d7": "BCM-57414 NextXtreme-E",
             },
         },
     }
@@ -224,8 +227,8 @@ def map_vendor_device_id(vendor_id, device_id):
     # https://doc.dpdk.org/api-2.2/rte__pci__dev__ids_8h_source.html
 
     vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("vendor_name", "Unknown")
-    vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("devices", {}).get(device_id, "Unknown")
-    return vendor_name, vendor_name
+    device_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("devices", {}).get(device_id, "Unknown")
+    return vendor_name, device_name
 
 
 def get_extra_ifaces_info(server, interface_list, iface_info_dict, ssh_command):
