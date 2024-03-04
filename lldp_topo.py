@@ -178,9 +178,9 @@ def get_iface_cmd_list(interface):
         f"cat /sys/class/net/{interface}/device/device",
         f"cat /sys/class/net/{interface}/device/vendor",
         f"cat /sys/class/net/{interface}/device/numa_node",
-        f"cat /sys/class/net/{interface}/speed || echo UNKNOWN",
-        f"cat /sys/class/net/{interface}/operstate || echo UNKNOWN",
-        f"cat /sys/class/net/{interface}/device/sriov_numvfs || echo UNKNOWN",
+        f"cat /sys/class/net/{interface}/speed || echo UNKNOWN SPEED",
+        f"cat /sys/class/net/{interface}/operstate || echo UNKNOWN OPERSTATE",
+        f"cat /sys/class/net/{interface}/device/sriov_numvfs || echo UNKNOWN NUMVFS",
     ]
     return iface_cmd_list
 
@@ -226,8 +226,8 @@ def map_vendor_device_id(vendor_id, device_id):
     # More device_ids in this link:
     # https://doc.dpdk.org/api-2.2/rte__pci__dev__ids_8h_source.html
 
-    vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("vendor_name", "Unknown")
-    device_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("devices", {}).get(device_id, "Unknown")
+    vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("vendor_name", "UNKNOWN VENDOR")
+    device_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("devices", {}).get(device_id, "UNKNOWN DEVICE")
     return vendor_name, device_name
 
 
@@ -661,7 +661,7 @@ if __name__ == "__main__":
         "--extra",
         default=False,
         action="store_true",
-        help="no extra info about server interfaces",
+        help="show extra info about server interfaces",
     )
     # parser_list_interfaces = argparse.ArgumentParser()
     parser_list_interfaces = subparsers.add_parser(
