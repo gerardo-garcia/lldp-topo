@@ -127,13 +127,6 @@ def run_command_list(server, command_list, ssh_command=None):
         for command in command_list:
             logger.debug(f"Command: {command}")
             _stdin, _stdout, _stderr = client.exec_command(command)
-#            _exit_status = _stdout.channel.recv_exit_status()
-#            if _exit_status:
-#                logger.error(f"Command: {command} failed")
-#                raise Exception()
-#            logger.debug(f"Command: {command} completed successfully")
-#            # print(_stdout.read().decode())
-#            answer_list.append(_stdout.read().decode())
             stdout_output = _stdout.read().decode().strip()
             stderr_output = _stderr.read().decode().strip()
             _exit_status = _stdout.channel.recv_exit_status()
@@ -142,7 +135,6 @@ def run_command_list(server, command_list, ssh_command=None):
                 logger.error(f"[{server}] stdout: {stdout_output}")
                 logger.error(f"[{server}] stderr: {stderr_output}")
                 raise Exception(f"Command failed on {server}: {command} | stderr: {stderr_output}")
-
             logger.debug(f"[{server}] Command succeeded: {command}")
             logger.debug(f"[{server}] stdout: {stdout_output}")
             answer_list.append(stdout_output)
@@ -195,9 +187,9 @@ def get_iface_cmd_list(interface):
         f"cat /sys/class/net/{interface}/device/device",
         f"cat /sys/class/net/{interface}/device/vendor",
         f"cat /sys/class/net/{interface}/device/numa_node",
-        f"cat /sys/class/net/{interface}/speed || echo UNKNOWN",
-        f"cat /sys/class/net/{interface}/operstate || echo UNKNOWN",
-        f"cat /sys/class/net/{interface}/device/sriov_numvfs || echo UNKNOWN",
+        f"cat /sys/class/net/{interface}/speed || echo UNKNOWN SPEED",
+        f"cat /sys/class/net/{interface}/operstate || echo UNKNOWN OPERSTATE",
+        f"cat /sys/class/net/{interface}/device/sriov_numvfs || echo UNKNOWN NUMVFS",
     ]
     return iface_cmd_list
 
@@ -232,6 +224,9 @@ def map_vendor_device_id(vendor_id, device_id):
             "vendor_name": "Broadcom",
             "devices": {
                 "0x1657": "BCM5719",
+                "0x165f": "BCM5120",
+                "0x16d6": "BCM-57412 NextXtreme-E",
+                "0x16d7": "BCM-57414 NextXtreme-E",
             },
         },
     }
@@ -240,9 +235,9 @@ def map_vendor_device_id(vendor_id, device_id):
     # More device_ids in this link:
     # https://doc.dpdk.org/api-2.2/rte__pci__dev__ids_8h_source.html
 
-    vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("vendor_name", "Unknown")
-    vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("devices", {}).get(device_id, "Unknown")
-    return vendor_name, vendor_name
+    vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("vendor_name", "UNKNOWN VENDOR")
+    device_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("devices", {}).get(device_id, "UNKNOWN DEVICE")
+    return vendor_name, device_name
 
 
 def get_extra_ifaces_info(server, interface_list, iface_info_dict, ssh_command):
@@ -344,6 +339,7 @@ def get_lldp_info(server, ssh_command=None):
         )
         exit(1)
     return chassis, interfaces, neighbors
+
 
 def get_brws_capabilities(chassis):
     logger.debug(f"Capabilities: {yaml.safe_dump(chassis, indent=4, default_flow_style=False, sort_keys=False)}")
@@ -677,7 +673,7 @@ if __name__ == "__main__":
         "--extra",
         default=False,
         action="store_true",
-        help="no extra info about server interfaces",
+        help="show extra info about server interfaces",
     )
     # parser_list_interfaces = argparse.ArgumentParser()
     parser_list_interfaces = subparsers.add_parser(
