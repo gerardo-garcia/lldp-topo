@@ -86,8 +86,12 @@ def run_command(server, command, ssh_command=None):
         _stdin, _stdout, _stderr = client.exec_command(command)
         _exit_status = _stdout.channel.recv_exit_status()
         if _exit_status:
-            logger.error(f"Command: {command} failed")
-            raise Exception()
+            error_output = _stderr.read().decode().strip()
+            stdout_output = _stdout.read().decode().strip()
+            logger.error(f"[{server}] Command failed: {command}")
+            logger.error(f"[{server}] stdout: {stdout_output}")
+            logger.error(f"[{server}] stderr: {error_output}")
+            raise Exception(f"Command failed on {server}: {command} | stderr: {error_output}")
         logger.info(f"Command: {command} completed successfully")
         # print(_stdout.read().decode())
         return _stdout.read().decode()
@@ -123,13 +127,26 @@ def run_command_list(server, command_list, ssh_command=None):
         for command in command_list:
             logger.debug(f"Command: {command}")
             _stdin, _stdout, _stderr = client.exec_command(command)
+#            _exit_status = _stdout.channel.recv_exit_status()
+#            if _exit_status:
+#                logger.error(f"Command: {command} failed")
+#                raise Exception()
+#            logger.debug(f"Command: {command} completed successfully")
+#            # print(_stdout.read().decode())
+#            answer_list.append(_stdout.read().decode())
+            stdout_output = _stdout.read().decode().strip()
+            stderr_output = _stderr.read().decode().strip()
             _exit_status = _stdout.channel.recv_exit_status()
             if _exit_status:
-                logger.error(f"Command: {command} failed")
-                raise Exception()
-            logger.debug(f"Command: {command} completed successfully")
-            # print(_stdout.read().decode())
-            answer_list.append(_stdout.read().decode())
+                logger.error(f"[{server}] Command failed: {command}")
+                logger.error(f"[{server}] stdout: {stdout_output}")
+                logger.error(f"[{server}] stderr: {stderr_output}")
+                raise Exception(f"Command failed on {server}: {command} | stderr: {stderr_output}")
+
+            logger.debug(f"[{server}] Command succeeded: {command}")
+            logger.debug(f"[{server}] stdout: {stdout_output}")
+            answer_list.append(stdout_output)
+
     else:
         for command in command_list:
             subprocess_cmd = f"{ssh_command} {server} {command}"
@@ -178,9 +195,9 @@ def get_iface_cmd_list(interface):
         f"cat /sys/class/net/{interface}/device/device",
         f"cat /sys/class/net/{interface}/device/vendor",
         f"cat /sys/class/net/{interface}/device/numa_node",
-        f"cat /sys/class/net/{interface}/speed || echo UNKNOWN SPEED",
-        f"cat /sys/class/net/{interface}/operstate || echo UNKNOWN OPERSTATE",
-        f"cat /sys/class/net/{interface}/device/sriov_numvfs || echo UNKNOWN NUMVFS",
+        f"cat /sys/class/net/{interface}/speed || echo UNKNOWN",
+        f"cat /sys/class/net/{interface}/operstate || echo UNKNOWN",
+        f"cat /sys/class/net/{interface}/device/sriov_numvfs || echo UNKNOWN",
     ]
     return iface_cmd_list
 
@@ -215,9 +232,6 @@ def map_vendor_device_id(vendor_id, device_id):
             "vendor_name": "Broadcom",
             "devices": {
                 "0x1657": "BCM5719",
-                "0x165f": "BCM5120",
-                "0x16d6": "BCM-57412 NextXtreme-E",
-                "0x16d7": "BCM-57414 NextXtreme-E",
             },
         },
     }
@@ -226,9 +240,9 @@ def map_vendor_device_id(vendor_id, device_id):
     # More device_ids in this link:
     # https://doc.dpdk.org/api-2.2/rte__pci__dev__ids_8h_source.html
 
-    vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("vendor_name", "UNKNOWN VENDOR")
-    device_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("devices", {}).get(device_id, "UNKNOWN DEVICE")
-    return vendor_name, device_name
+    vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("vendor_name", "Unknown")
+    vendor_name = VENDOR_DEVICE_MAPPING.get(vendor_id, {}).get("devices", {}).get(device_id, "Unknown")
+    return vendor_name, vendor_name
 
 
 def get_extra_ifaces_info(server, interface_list, iface_info_dict, ssh_command):
@@ -299,14 +313,10 @@ def get_ifaces_info(server, interface_list, extra_pf_info=False, ssh_command=Non
             get_extra_ifaces_info(server, physical_iface_list, iface_dict, ssh_command)
         return iface_dict
 
-    except Exception:
-        logger.info(print(f"Server {server}: {command} DID NOT WORK"))
-        e = traceback_format_exc()
-        logger.critical(
-            f"Server {server}: {command} DID NOT WORK. Exit Exception: {e}",
-            exc_info=True,
-        )
-        exit(1)
+    except Exception as e:
+        logger.error(f"Exception while getting interface info from server {server}")
+        logger.critical(traceback_format_exc(), exc_info=True)
+    exit(1)
 
 
 def get_lldp_info(server, ssh_command=None):
@@ -335,33 +345,36 @@ def get_lldp_info(server, ssh_command=None):
         exit(1)
     return chassis, interfaces, neighbors
 
-
 def get_brws_capabilities(chassis):
     logger.debug(f"Capabilities: {yaml.safe_dump(chassis, indent=4, default_flow_style=False, sort_keys=False)}")
     bridge = "X"
     router = "X"
     wlan = "X"
     station = "X"
-    for c in chassis.get("capability", []):
+
+    caps = chassis.get("capability", [])
+
+    if isinstance(caps, dict):
+        caps = [caps]
+
+    for c in caps:
+        if not isinstance(c, dict):
+            continue
         if c.get("type") == "Bridge":
             if "enabled" in c:
                 bridge = str(int(c.get("enabled")))
-            continue
-        if c.get("type") == "Router":
+        elif c.get("type") == "Router":
             if "enabled" in c:
                 router = str(int(c.get("enabled")))
-            continue
-        if c.get("type") == "Wlan":
+        elif c.get("type") == "Wlan":
             if "enabled" in c:
                 wlan = str(int(c.get("enabled")))
-            continue
-        if c.get("type") == "Station":
+        elif c.get("type") == "Station":
             if "enabled" in c:
                 station = str(int(c.get("enabled")))
-            continue
+
     brws = f"{bridge}{router}{wlan}{station}"
     return brws
-
 
 def parse_neighbors(neighbors):
     neighbor_dict = {}
@@ -478,6 +491,9 @@ def get_topo_subcmd(args):
             # if re.match("enp.*s.*f.*", iface1) or re.match("ens.*f.*", iface1):
             #     logger.info(f"Skipping interface {iface1} since it is an SR-IOV interface")
             #     continue
+            if iface1.startswith("enx"):
+                logger.info(f"Skipping USB-like interface {iface1}")
+                continue
             mac1 = iface[iface1].get("port", {}).get("id", {}).get("value", "")
 
             # Get relevant fields from neighbors in interface iface1
@@ -661,7 +677,7 @@ if __name__ == "__main__":
         "--extra",
         default=False,
         action="store_true",
-        help="show extra info about server interfaces",
+        help="no extra info about server interfaces",
     )
     # parser_list_interfaces = argparse.ArgumentParser()
     parser_list_interfaces = subparsers.add_parser(
