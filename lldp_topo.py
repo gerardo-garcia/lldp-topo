@@ -442,7 +442,7 @@ def parse_neighbors(neighbors):
                     len(chassis_keys),
                     chassis_keys,
                 )
-                exit(1)
+                sys.exit(1)
             chassis_name = chassis_keys[0]
             # Expected chassis:
             # "chassis": {
@@ -451,8 +451,8 @@ def parse_neighbors(neighbors):
             #             "type": "mac",
             #             "value": "0c:29:ef:c9:46:a0"
             #         },
-            #     "capability": [ ...
-            #     ]
+            #         "capability": [ ...
+            #         ]
             # }
             # In some cases, the name of the chassis is not sent by the switch
             # "chassis": {
