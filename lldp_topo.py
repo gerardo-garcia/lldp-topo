@@ -299,9 +299,9 @@ def get_extra_ifaces_info(server, interface_list, iface_info_dict, ssh_command):
         iface_info["speed"] = speed
         iface_info["operstate"] = operstate
         iface_info["numvfs"] = numvfs
-        iface_info[
-            "extra"
-        ] = f"{vendor_name},{vendor_id},{device_name},{device_id},{speed},{operstate},{numvfs}"
+        iface_info["extra"] = (
+            f"{vendor_name},{vendor_id},{device_name},{device_id},{speed},{operstate},{numvfs}"
+        )
         iface_info_dict[interface] = iface_info
 
 

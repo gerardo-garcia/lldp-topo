@@ -1,4 +1,5 @@
 """Test cases for lldp_topo module"""
+
 import pytest
 import lldp_topo
 
