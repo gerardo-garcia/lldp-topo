@@ -319,8 +319,9 @@ def get_ifaces_info(server, interface_list, extra_pf_info=False, ssh_command=Non
         # Generate list of commands to know iface type for each interface
         for interface in interface_list:
             command = (
-                f'iface_type="pf"; [ -d "/sys/class/net/{interface}/device/physfn" ] && iface_type="vf"; '
-                + f'[ ! -d "/sys/class/net/{interface}/device" ] && iface_type="vlan"; echo $iface_type'
+                f'iface_type="pf"; [ -d "/sys/class/net/{interface}/device/physfn" ] '
+                + f'&& iface_type="vf"; [ ! -d "/sys/class/net/{interface}/device" ] '
+                + '&& iface_type="vlan"; echo $iface_type'
             )
             command_list.append(command)
         # Run list of commands in a single SSH session to know type of each interface
@@ -783,7 +784,9 @@ if __name__ == "__main__":
     )
 
     # Parse args, allowing global options to reach subparsers
-    # From <https://stackoverflow.com/questions/46962065/add-top-level-argparse-arguments-after-subparser-args>
+    # From
+    # <https://stackoverflow.com/questions/46962065/
+    # add-top-level-argparse-arguments-after-subparser-args>
     ns, extras = main_parser.parse_known_args()
     # print(ns)
     # print(extras)
