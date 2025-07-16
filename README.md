@@ -124,13 +124,13 @@ Server user2@server2: LLDPCLI working
 The recommended procedure to troubleshoot any problem is to use option `-v`, which logs commands used to get LLDP information, and the option `-e` which gives us extra information about the interface.
 
 ```bash
-$ ./lldp_topo.py get-topology -v -e user1@server1 user2@server2
+./lldp_topo.py get-topology -v -e user1@server1 user2@server2
 ```
 
 To get the list of physical interfaces and their info:
 
 ```bash
-$ ./lldp_topo.py list-interfaces user1@server1 user2@server2
+./lldp_topo.py list-interfaces user1@server1 user2@server2
 ```
 
 ## Requirements
@@ -142,4 +142,3 @@ $ ./lldp_topo.py list-interfaces user1@server1 user2@server2
 ## Future additions
 
 - Print PCI address and NUMA Node for each compute interface
-
