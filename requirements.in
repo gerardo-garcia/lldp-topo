@@ -1,3 +1,5 @@
 prettytable
 pyyaml
 paramiko
+requests
+urllib3
